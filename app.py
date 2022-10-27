@@ -2,21 +2,31 @@ from flask import Flask, render_template, Response, redirect
 import cv2
 import numpy as np
 from statistics import mean
+import game
 
 app = Flask(__name__)
 
 # Capture the first camera on the system
 camera = cv2.VideoCapture(0)
 
+camWidth = 800
+camHeight = 600
+
+camWidth = camera.get(cv2.CAP_PROP_FRAME_WIDTH)
+camHeight = camera.get(cv2.CAP_PROP_FRAME_HEIGHT)
+
 # Example Red
 lower_color = np.array([150,100,100], dtype=np.uint8)
 upper_color = np.array([220,255,255], dtype=np.uint8)
 
-# Example Blue
-#lower_color = np.array([100,100,100], dtype=np.uint8)
-#upper_color = np.array([110,130,150], dtype=np.uint8)
-
 average_color = np.array([255,255,255], dtype=np.uint8)
+
+# Ball variables
+ballX = int(camWidth / 2)
+ballY = int(camHeight / 2)
+ballRadius = 32
+ballVelX = 3
+ballVelY = 3
 
 def c_picker():  # generate frame by frame from camera
 
@@ -66,7 +76,7 @@ def c_picker():  # generate frame by frame from camera
 
         average_color[0] = int(mean(h))
         average_color[1] = int(mean(s))
-        average_color[2] = int(mean(v))
+        average_color[2] = int(mean(v)) 
 
         ret, buffer = cv2.imencode('.jpg', frame)
         frame = buffer.tobytes()
@@ -78,6 +88,11 @@ def gen_frames():  # generate frame by frame from camera
 
     global lower_color
     global upper_color
+
+    global ballX
+    global ballY
+    global ballVelX
+    global ballVelY
 
     # We want to loop this forever
     while True:
@@ -152,6 +167,13 @@ def gen_frames():  # generate frame by frame from camera
         # We draw the rectangle onto the screen here
         cv2.rectangle(frame,(x,y),(x+w,y+h),[255,0,0],2)
 
+        #Draw the ball
+        cv2.circle(frame, (ballX, ballY), ballRadius, (0, 255, 0), 16)
+        ballX = game.updateVal(ballX, ballVelX)
+        ballY = game.updateVal(ballY, ballVelY)
+        ballVelX = game.bounce(ballVelX, ballX, ballRadius, camWidth)
+        ballVelY = game.bounce(ballVelY, ballY, ballRadius, camHeight)
+
         # This step encodes the data into a jpeg image
         ret, buffer = cv2.imencode('.jpg', frame)
 
@@ -212,6 +234,5 @@ def do_set():
 
     return redirect("/")
 
-
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run(threaded=True)
