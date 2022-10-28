@@ -41,3 +41,7 @@ ball fall off the edge of the screen.
 
 Note: moving the object away from the camera reduces the paddle size while moving the object towards
 the camera increases its size so use that knowledge to your advantage when playing.
+
+## Screenshot
+
+![Screenshot](screenshot.png)
