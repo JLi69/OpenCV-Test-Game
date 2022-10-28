@@ -2,31 +2,30 @@ from flask import Flask, render_template, Response, redirect
 import cv2
 import numpy as np
 from statistics import mean
+#game module
 import game
 
 app = Flask(__name__)
 
 # Capture the first camera on the system
 camera = cv2.VideoCapture(0)
-
-camWidth = 800
-camHeight = 600
-
+#camera dimensions
 camWidth = camera.get(cv2.CAP_PROP_FRAME_WIDTH)
 camHeight = camera.get(cv2.CAP_PROP_FRAME_HEIGHT)
 
-# Example Red
-lower_color = np.array([150,100,100], dtype=np.uint8)
-upper_color = np.array([220,255,255], dtype=np.uint8)
+lower_color = np.array([60,60,140], dtype=np.uint8)
+upper_color = np.array([100,100,255], dtype=np.uint8)
 
 average_color = np.array([255,255,255], dtype=np.uint8)
 
 # Ball variables
 ballX = int(camWidth / 2)
 ballY = int(camHeight / 2)
-ballRadius = 32
+ballRadius = 16
 ballVelX = 3
 ballVelY = 3
+#bricks
+bricks = game.initBricks(4, camWidth);
 
 def c_picker():  # generate frame by frame from camera
 
@@ -89,10 +88,12 @@ def gen_frames():  # generate frame by frame from camera
     global lower_color
     global upper_color
 
+    #someone please fix all of these globals
     global ballX
     global ballY
     global ballVelX
     global ballVelY
+    global bricks
 
     # We want to loop this forever
     while True:
@@ -165,21 +166,76 @@ def gen_frames():  # generate frame by frame from camera
         h = rectangle["h"]
 
         # We draw the rectangle onto the screen here
-        cv2.rectangle(frame,(x,y),(x+w,y+h),[255,0,0],2)
+        cv2.rectangle(frame,(x,y),(x+w,y+h),[0,0,255],16)
+
+        # -------- Begin Game Code ----------
 
         #Draw the ball
         cv2.circle(frame, (ballX, ballY), ballRadius, (0, 255, 0), 16)
+        
+        #update the ball 
         ballX = game.updateVal(ballX, ballVelX)
         ballY = game.updateVal(ballY, ballVelY)
         ballVelX = game.bounce(ballVelX, ballX, ballRadius, camWidth)
-        ballVelY = game.bounce(ballVelY, ballY, ballRadius, camHeight)
+        ballVelY = game.bounce(ballVelY, ballY, ballRadius, 999999)
+
+        #Detect collision
+        if game.colliding(ballX, ballY, ballRadius, rectangle["x"], rectangle["y"], rectangle["w"], rectangle["h"]):  
+            #Bounce the ball 
+            if ballX < rectangle["x"] or ballX > rectangle["x"] + rectangle["w"]: 
+                ballVelX *= -1
+                ballX = game.updateVal(ballX, ballVelX)
+                ballY = game.updateVal(ballY, ballVelY)        
+            else:
+                ballVelY *= -1
+                ballX = game.updateVal(ballX, ballVelX)
+                ballY = game.updateVal(ballY, ballVelY)
+
+        collisionInfo = game.checkBrickCollision(ballX, ballY, ballRadius, bricks)
+        bricks = collisionInfo[0]
+        collisionFound = collisionInfo[1]
+        
+        #if ball hit block, reverse y velocity
+        if collisionFound:
+            ballVelY *= -1
+
+        #prevent the ball from leaving the camera
+        ballX = int(game.bound(ballX, ballRadius + 1, camWidth - ballRadius - 1))
+        ballY = int(game.bound(ballY, ballRadius + 1, 999999))
+
+        #check if ball fell off screen, then reset game
+        if ballY > camHeight:
+            bricks = game.initBricks(4, camWidth)
+            ballX = int(camWidth / 2)
+            ballY = int(camHeight / 2)
+            ballVelX = 3
+            ballVelY = 3
+
+        #check if all the bricks are destroyed,
+        #if they are, reset the game
+        win = True
+        for brick in bricks:
+            win = brick["broken"] and win
+
+        if win:
+            bricks = game.initBricks(4, camWidth)
+            ballX = int(camWidth / 2)
+            ballY = int(camHeight / 2)
+            ballVelX = 3
+            ballVelY = 3
+    
+        #draw the bricks
+        for brick in bricks:
+            if(brick["broken"]):
+                continue
+            cv2.rectangle(frame,(brick["x"],brick["y"]),(brick["x"]+brick["w"],brick["y"]+brick["h"]),[255,0,0],16)
+        
+        # -------- End Game Code ----------
 
         # This step encodes the data into a jpeg image
         ret, buffer = cv2.imencode('.jpg', frame)
-
         # We have to return bytes to the user
         frame = buffer.tobytes()
-
         # Return the image to the browser
         yield (b'--frame\r\n'
                b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n')  # concat frame one by one and show result
